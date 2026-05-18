@@ -314,17 +314,6 @@ qualinet:
   qdc_model_path: "models/qualinet/qdc_model.pth"
   ra_model_url: ""
   qdc_model_url: ""
-  ra_labels:
-    - "left_above"
-    - "left_overlap"
-    - "left_below"
-    - "overlap_above"
-    - "overlap_overlap"
-    - "overlap_below"
-    - "right_above"
-    - "right_overlap"
-    - "right_below"
-  qdc_labels: ["very close", "close", "normal", "far"]
   image_size: 224
 ```
 
@@ -369,7 +358,6 @@ Important sections:
 
 ## References
 
-For the complete and up-to-date publication list, see Nassim Belmecheri's [Google Scholar profile](https://scholar.google.com/citations?user=VccEbq4AAAAJ&hl=fr).
 
 Project-related publications on qualitative reasoning, qualitative scene understanding, and automated driving:
 
