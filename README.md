@@ -319,8 +319,6 @@ Important sections:
 
 ## References
 
-For the complete and up-to-date publication list, see Nassim Belmecheri's [Google Scholar profile](https://scholar.google.com/citations?user=VccEbq4AAAAJ&hl=fr).
-
 Project-related publications on qualitative reasoning, qualitative scene understanding, and automated driving:
 
 - Nassim Belmecheri, Arnaud Gotlieb, Nadjib Lazaar, and Helge Spieker. [Acquiring Qualitative Explainable Graphs for Automated Driving Scene Interpretation](https://arxiv.org/abs/2308.12755). arXiv:2308.12755, 2023.
