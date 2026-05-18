@@ -4,6 +4,7 @@ import argparse
 
 from qxg_platform.config import load_config
 from qxg_platform.inputs import RealtimeInput, RecordingInput, VideoFileInput, WebcamInput
+from qxg_platform.logging_utils import configure_logging
 from qxg_platform.platform import QXGPlatform
 
 
@@ -20,6 +21,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
+    log_file = configure_logging()
     args = build_parser().parse_args()
     config = load_config(args.config)
     if args.mode == "remote":
@@ -34,7 +36,10 @@ def main() -> None:
         input_handler = VideoFileInput(args.source)
     else:
         input_handler = RecordingInput(args.source, config.reasoning_mode)
-    QXGPlatform(config, input_handler).run()
+    try:
+        QXGPlatform(config, input_handler).run()
+    except Exception as exc:
+        raise SystemExit(f"{exc}\nFull log: {log_file}") from exc
 
 
 if __name__ == "__main__":

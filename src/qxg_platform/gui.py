@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import logging
 import queue
 import threading
 import traceback
@@ -11,10 +12,12 @@ import yaml
 
 from qxg_platform.config import PlatformConfig, load_config
 from qxg_platform.inputs import RealtimeInput, RecordingInput, VideoFileInput, WebcamInput
+from qxg_platform.logging_utils import configure_logging
 from qxg_platform.platform import QXGPlatform
 
 DEFAULT_CONFIG = Path("configs/video.yaml")
 DEFAULT_PROFILES = Path("configs/model_profiles.yaml")
+LOGGER = logging.getLogger(__name__)
 
 
 class LauncherApp:
@@ -23,6 +26,7 @@ class LauncherApp:
         self.root.title("QXG Platform Launcher")
         self.root.geometry("820x520")
         self.root.minsize(760, 480)
+        self.log_file = configure_logging()
         self.events: queue.Queue[str] = queue.Queue()
         self.worker: threading.Thread | None = None
         self.profiles = load_profiles(DEFAULT_PROFILES)
@@ -34,7 +38,9 @@ class LauncherApp:
         self.model_path = StringVar(value="")
         self.reasoning_mode = StringVar(value="2d")
         self.enable_relevance = BooleanVar(value=False)
-        self.status = StringVar(value="Choose a source, then start the platform.")
+        self.status = StringVar(
+            value=f"Choose a source, then start the platform. Logs: {self.log_file}"
+        )
 
         self._build()
         self._sync_profile_to_form()
@@ -183,7 +189,8 @@ class LauncherApp:
             config = self._build_config()
             input_handler = self._build_input_handler(config)
         except Exception as exc:
-            messagebox.showerror("Cannot start", str(exc))
+            LOGGER.exception("Failed to prepare platform from GUI selections")
+            messagebox.showerror("Cannot start", f"{exc}\n\nFull log:\n{self.log_file}")
             return
         self.worker = threading.Thread(
             target=self._run_platform,
@@ -192,6 +199,13 @@ class LauncherApp:
         )
         self.worker.start()
         self.status.set("Platform is running. Press q in the visualization window to stop.")
+        LOGGER.info(
+            "Started platform from GUI input_type=%s source=%s profile=%s model=%s",
+            self.input_type.get(),
+            self.source.get(),
+            self.profile_key.get(),
+            self.model_path.get(),
+        )
 
     def _build_config(self) -> PlatformConfig:
         loaded = load_config(self.config_path.get())
@@ -231,7 +245,9 @@ class LauncherApp:
         try:
             QXGPlatform(config, input_handler).run()
             self.events.put("Platform stopped.")
+            LOGGER.info("Platform stopped normally")
         except Exception:
+            LOGGER.exception("Platform runtime failed")
             self.events.put(traceback.format_exc())
 
     def _poll_events(self) -> None:
@@ -242,7 +258,7 @@ class LauncherApp:
             return
         self.status.set(message.splitlines()[-1] if message else "Platform stopped.")
         if "Traceback" in message:
-            messagebox.showerror("Runtime error", message)
+            messagebox.showerror("Runtime error", f"{message}\n\nFull log:\n{self.log_file}")
         self.root.after(250, self._poll_events)
 
 
@@ -256,6 +272,7 @@ def load_profiles(path: Path) -> dict[str, dict]:
 
 
 def main() -> None:
+    configure_logging()
     root = Tk()
     LauncherApp(root)
     root.mainloop()
