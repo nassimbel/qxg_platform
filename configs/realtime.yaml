@@ -46,3 +46,9 @@ relevance:
 visualization:
   enabled: true
   window_name: "QXG Platform"
+
+recording:
+  enabled: false
+  output_dir: "recordings"
+  depth_scale: 1000.0
+  image_quality: 95

@@ -47,3 +47,9 @@ visualization:
   privacy_blur:
     enabled: false
     kernel_size: 31
+
+recording:
+  enabled: false
+  output_dir: "recordings"
+  depth_scale: 1000.0
+  image_quality: 95

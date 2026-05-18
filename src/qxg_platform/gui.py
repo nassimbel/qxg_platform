@@ -17,6 +17,32 @@ from qxg_platform.platform import QXGPlatform
 
 DEFAULT_CONFIG = Path("configs/video.yaml")
 DEFAULT_PROFILES = Path("configs/model_profiles.yaml")
+DEFAULT_RECORDINGS_DIR = Path("recordings")
+DEFAULT_DETECTION_CLASSES = [
+    "person",
+    "bicycle",
+    "car",
+    "motorcycle",
+    "bus",
+    "truck",
+    "traffic light",
+    "fire hydrant",
+    "stop sign",
+    "parking meter",
+    "bench",
+    "cat",
+    "dog",
+    "backpack",
+    "umbrella",
+    "handbag",
+    "bottle",
+    "cup",
+    "chair",
+    "couch",
+    "potted plant",
+    "laptop",
+    "cell phone",
+]
 LOGGER = logging.getLogger(__name__)
 
 
@@ -24,8 +50,8 @@ class LauncherApp:
     def __init__(self, root: Tk):
         self.root = root
         self.root.title("QXG Platform Launcher")
-        self.root.geometry("820x520")
-        self.root.minsize(760, 480)
+        self.root.geometry("920x720")
+        self.root.minsize(840, 660)
         self.log_file = configure_logging()
         self.events: queue.Queue[str] = queue.Queue()
         self.worker: threading.Thread | None = None
@@ -38,6 +64,11 @@ class LauncherApp:
         self.model_path = StringVar(value="")
         self.reasoning_mode = StringVar(value="2d")
         self.enable_relevance = BooleanVar(value=False)
+        self.save_recording = BooleanVar(value=False)
+        self.recording_dir = StringVar(value=str(DEFAULT_RECORDINGS_DIR))
+        self.class_vars = {
+            class_name: BooleanVar(value=False) for class_name in DEFAULT_DETECTION_CLASSES
+        }
         self.status = StringVar(
             value=f"Choose a source, then start the platform. Logs: {self.log_file}"
         )
@@ -105,13 +136,39 @@ class LauncherApp:
             variable=self.enable_relevance,
         ).grid(row=6, column=1, sticky="w", pady=8)
 
+        recording = ttk.LabelFrame(outer, text="Realtime Recording")
+        recording.grid(row=7, column=0, columnspan=3, sticky="ew", pady=(8, 0))
+        recording.columnconfigure(1, weight=1)
+        ttk.Checkbutton(
+            recording,
+            text="Save frames while the platform runs",
+            variable=self.save_recording,
+        ).grid(row=0, column=0, sticky="w", padx=10, pady=8)
+        ttk.Entry(recording, textvariable=self.recording_dir).grid(
+            row=0, column=1, sticky="ew", padx=(8, 0), pady=8
+        )
+        ttk.Button(recording, text="Browse", command=self._browse_recording_dir).grid(
+            row=0, column=2, sticky="e", padx=8, pady=8
+        )
+
+        objects = ttk.LabelFrame(outer, text="Objects To Detect")
+        objects.grid(row=8, column=0, columnspan=3, sticky="ew", pady=(12, 0))
+        for index, (class_name, variable) in enumerate(self.class_vars.items()):
+            ttk.Checkbutton(objects, text=class_name, variable=variable).grid(
+                row=index // 4,
+                column=index % 4,
+                sticky="w",
+                padx=10,
+                pady=3,
+            )
+
         buttons = ttk.Frame(outer)
-        buttons.grid(row=7, column=1, sticky="ew", pady=(18, 8))
+        buttons.grid(row=9, column=1, sticky="ew", pady=(18, 8))
         ttk.Button(buttons, text="Start Platform", command=self._start).pack(side="left")
         ttk.Button(buttons, text="Quit", command=self.root.destroy).pack(side="left", padx=8)
 
         info = ttk.LabelFrame(outer, text="Visualization")
-        info.grid(row=8, column=0, columnspan=3, sticky="nsew", pady=(18, 0))
+        info.grid(row=10, column=0, columnspan=3, sticky="nsew", pady=(18, 0))
         info.columnconfigure(0, weight=1)
         ttk.Label(
             info,
@@ -125,7 +182,7 @@ class LauncherApp:
         ).grid(row=0, column=0, sticky="w", padx=10, pady=10)
 
         ttk.Label(outer, textvariable=self.status).grid(
-            row=9, column=0, columnspan=3, sticky="ew", pady=(16, 0)
+            row=11, column=0, columnspan=3, sticky="ew", pady=(16, 0)
         )
 
     def _browse_source(self) -> None:
@@ -159,6 +216,11 @@ class LauncherApp:
         if value:
             self.config_path.set(value)
 
+    def _browse_recording_dir(self) -> None:
+        value = filedialog.askdirectory(title="Choose recording output directory")
+        if value:
+            self.recording_dir.set(value)
+
     def _on_input_change(self) -> None:
         input_type = self.input_type.get()
         self.profile_key.set(self.first_profile_for(input_type))
@@ -178,8 +240,21 @@ class LauncherApp:
         profile = self.profiles[self.profile_key.get()]
         self.model_path.set(str(profile.get("model_weights", "")))
         self.reasoning_mode.set(str(profile.get("reasoning_mode", "2d")))
+        self._sync_class_checkboxes(profile.get("classes", []))
         label = profile.get("label", self.profile_key.get())
         self.status.set(f"Selected model profile: {label}")
+
+    def _sync_class_checkboxes(self, selected_classes: list[str]) -> None:
+        selected = set(selected_classes or DEFAULT_DETECTION_CLASSES)
+        for class_name, variable in self.class_vars.items():
+            variable.set(class_name in selected)
+
+    def _selected_classes(self) -> list[str]:
+        return [
+            class_name
+            for class_name, variable in self.class_vars.items()
+            if variable.get()
+        ]
 
     def _start(self) -> None:
         if self.worker and self.worker.is_alive():
@@ -231,11 +306,16 @@ class LauncherApp:
         raw["detection"]["image_size"] = int(
             profile.get("image_size", raw["detection"].get("image_size", 960))
         )
-        raw["detection"]["classes"] = profile.get(
-            "classes", raw["detection"].get("classes", [])
-        )
+        selected_classes = self._selected_classes()
+        if not selected_classes:
+            raise ValueError("Select at least one object to detect.")
+        raw["detection"]["classes"] = selected_classes
         raw.setdefault("relevance", {})["enabled"] = bool(self.enable_relevance.get())
         raw.setdefault("visualization", {})["enabled"] = True
+        raw["recording"] = {
+            "enabled": bool(self.save_recording.get()),
+            "output_dir": self.recording_dir.get() or str(DEFAULT_RECORDINGS_DIR),
+        }
         return PlatformConfig(raw=raw, source_path=loaded.source_path)
 
     def _build_input_handler(self, config: PlatformConfig):

@@ -7,6 +7,7 @@ from qxg_platform.detection import DetectionTracker
 from qxg_platform.domain import create_camera_object
 from qxg_platform.inputs import InputHandler
 from qxg_platform.qxg_builder import QXGBuilder
+from qxg_platform.recording import FrameRecorder
 from qxg_platform.relevance import RelevanceSelector
 from qxg_platform.visualization import Visualizer
 
@@ -23,6 +24,7 @@ class QXGPlatform:
         self.builder = QXGBuilder(analysis, self.camera)
         self.relevance = RelevanceSelector(config.section("relevance"))
         self.visualizer = Visualizer(config.section("visualization"))
+        self.recorder = FrameRecorder(config.section("recording"), config.reasoning_mode)
         self.camera_id = self.camera.tracking_id if self.camera else 0
         self._depth_warning_logged = False
 
@@ -32,6 +34,7 @@ class QXGPlatform:
             for frame_idx, (frame, world_info) in enumerate(self.input_handler.frames(), start=1):
                 if self.config.reasoning_mode == "3d" and world_info is None:
                     self._warn_missing_depth_once()
+                self.recorder.save(frame_idx, frame, world_info)
                 objects = self.detector.process_frame(frame, world_info)
                 relations, all_objects = self.builder.build(objects, frame_idx)
                 relevant = self.relevance.select(all_objects, relations, self.camera_id)
